@@ -1,0 +1,24 @@
+# PostgreSQL lokal untuk pengembangan & testing. Menyediakan dua database:
+#   lms       → data sungguhan (db:migrate + db:bootstrap)
+#   lms_test  → data demo & Playwright (nama WAJIB mengandung "test"; seed menghapus isinya)
+services:
+  db:
+    image: postgres:16
+    container_name: lms-postgres
+    environment:
+      POSTGRES_USER: lms
+      POSTGRES_PASSWORD: lms
+      POSTGRES_DB: lms
+    ports:
+      - '5432:5432'
+    volumes:
+      - lms-pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U lms -d lms']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  lms-pgdata:
