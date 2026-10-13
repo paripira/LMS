@@ -48,7 +48,7 @@ function Chart({ title, data, xKey, yKey, domain }: { title: string; data: objec
 }
 
 export default function KepsekPage() {
-  const [jenjang, setJenjang] = useState<'' | 'SD' | 'SMP'>('');
+  const [jenjang, setJenjang] = useState<'' | 'TK' | 'SD' | 'SMP'>('');
 
   const { data } = useQuery({
     queryKey: ['analytics', 'active', jenjang],
@@ -58,7 +58,7 @@ export default function KepsekPage() {
   if (!data) return <p className="text-slate-400">Memuat…</p>;
   if (!data.semester) return <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Belum ada semester aktif.</p>;
 
-  const unitLabel = jenjang ? `Unit ${jenjang}` : 'Semua Jenjang (SD & SMP)';
+  const unitLabel = jenjang ? `Unit ${jenjang}` : 'Semua Jenjang (TK, SD & SMP)';
 
   return (
     <div className="w-full space-y-6">
@@ -76,6 +76,7 @@ export default function KepsekPage() {
         <div className="flex gap-1.5 rounded-xl bg-white/10 p-1">
           {[
             { k: '', label: 'Semua Jenjang' },
+            { k: 'TK', label: 'Unit TK' },
             { k: 'SD', label: 'Unit SD' },
             { k: 'SMP', label: 'Unit SMP' },
           ].map((t) => (

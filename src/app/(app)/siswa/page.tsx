@@ -55,10 +55,34 @@ interface StudentDetail {
     sakit: number;
     alpa: number;
     pct: number;
+    logs: { date: string; status: 'hadir' | 'izin' | 'sakit' | 'alpa'; note: string | null; subject?: string | null }[];
   };
+  grades: {
+    subject: string;
+    formative: number | null;
+    sas: number | null;
+    final: number | null;
+    predicate: string | null;
+    narrative: string | null;
+    is_locked: boolean;
+  }[];
+  cbtResults: {
+    title: string;
+    subject: string;
+    score: number | null;
+    submitted_at: string | null;
+    status: string;
+  }[];
   schedules?: ScheduleItem[];
   studentRecords?: StudentRecordItem[];
 }
+
+const ATT_BADGE: Record<string, string> = {
+  hadir: 'bg-emerald-100 text-emerald-800',
+  izin: 'bg-sky-100 text-sky-800',
+  sakit: 'bg-amber-100 text-amber-800',
+  alpa: 'bg-rose-100 text-rose-800',
+};
 
 const DAYS: Record<number, string> = {
   1: 'Senin',
@@ -75,7 +99,7 @@ const when = (iso: string) =>
 
 export default function StudentHome() {
   const [activeTab, setActiveTab] = useState<
-    'exams' | 'schedule' | 'assignments' | 'materials' | 'records' | 'reports'
+    'exams' | 'grades' | 'schedule' | 'attendance' | 'assignments' | 'materials' | 'records' | 'reports'
   >('exams');
 
   const { data: exams = [] } = useQuery({
@@ -152,6 +176,16 @@ export default function StudentHome() {
           )}
         </button>
         <button
+          onClick={() => setActiveTab('grades')}
+          className={`border-b-3 px-3.5 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition ${
+            activeTab === 'grades'
+              ? 'border-[#f5b800] text-[#162d6e]'
+              : 'border-transparent text-slate-500 hover:text-[#162d6e]'
+          }`}
+        >
+          Nilai & Ujian
+        </button>
+        <button
           onClick={() => setActiveTab('schedule')}
           className={`border-b-3 px-3.5 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition ${
             activeTab === 'schedule'
@@ -160,6 +194,16 @@ export default function StudentHome() {
           }`}
         >
           Jadwal Pelajaran
+        </button>
+        <button
+          onClick={() => setActiveTab('attendance')}
+          className={`border-b-3 px-3.5 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap transition ${
+            activeTab === 'attendance'
+              ? 'border-[#f5b800] text-[#162d6e]'
+              : 'border-transparent text-slate-500 hover:text-[#162d6e]'
+          }`}
+        >
+          Kehadiran
         </button>
         <button
           onClick={() => setActiveTab('assignments')}
@@ -234,6 +278,89 @@ export default function StudentHome() {
         </section>
       )}
 
+      {/* Tab: Nilai & Hasil Ujian */}
+      {activeTab === 'grades' && detail && (
+        <section className="space-y-4">
+          <div className="card space-y-3">
+            <h3 className="font-semibold text-slate-900">Nilai Mata Pelajaran (Semester Aktif)</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-600 text-xs">
+                  <tr>
+                    <th className="px-3 py-2">Mata Pelajaran</th>
+                    <th className="px-3 py-2 text-center">Formatif</th>
+                    <th className="px-3 py-2 text-center">SAS / PAS</th>
+                    <th className="px-3 py-2 text-center">Nilai Akhir</th>
+                    <th className="px-3 py-2 text-center">Predikat</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {detail.grades.map((g, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-2 font-medium">{g.subject}</td>
+                      <td className="px-3 py-2 text-center">
+                        {g.formative != null ? Math.round(g.formative) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {g.sas != null ? Math.round(g.sas) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center font-bold">
+                        {g.final != null ? Math.round(g.final) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center font-semibold text-blue-700">
+                        {g.predicate ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  {detail.grades.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-4 text-center text-xs text-slate-400">
+                        Belum ada nilai yang diinput guru semester ini.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card space-y-3">
+            <h3 className="font-semibold text-slate-900">Riwayat Ujian Online (CBT)</h3>
+            <div className="divide-y divide-slate-100 text-sm">
+              {detail.cbtResults.map((r, i) => (
+                <div key={i} className="py-2 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-slate-900">{r.title}</div>
+                    <div className="text-xs text-slate-500">
+                      {r.subject} ·{' '}
+                      {r.submitted_at
+                        ? new Date(r.submitted_at).toLocaleDateString('id-ID')
+                        : 'Belum selesai'}
+                    </div>
+                  </div>
+                  <div>
+                    {r.score != null ? (
+                      <span className="rounded bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">
+                        {r.score}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        {r.status === 'submitted' ? 'Menunggu pengumuman' : 'Sedang berjalan'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {detail.cbtResults.length === 0 && (
+                <p className="py-4 text-center text-xs text-slate-400">
+                  Belum ada riwayat ujian CBT.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Tab: Jadwal Pelajaran */}
       {activeTab === 'schedule' && (
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -272,6 +399,65 @@ export default function StudentHome() {
               </div>
             );
           })}
+        </section>
+      )}
+
+      {/* Tab: Kehadiran */}
+      {activeTab === 'attendance' && detail && (
+        <section className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+            <div className="card bg-emerald-50 border border-emerald-100 p-3">
+              <div className="text-xs text-emerald-700 font-medium">Hadir</div>
+              <div className="text-xl font-bold text-emerald-800">{detail.attendance.hadir}</div>
+            </div>
+            <div className="card bg-sky-50 border border-sky-100 p-3">
+              <div className="text-xs text-sky-700 font-medium">Izin</div>
+              <div className="text-xl font-bold text-sky-800">{detail.attendance.izin}</div>
+            </div>
+            <div className="card bg-amber-50 border border-amber-100 p-3">
+              <div className="text-xs text-amber-700 font-medium">Sakit</div>
+              <div className="text-xl font-bold text-amber-800">{detail.attendance.sakit}</div>
+            </div>
+            <div className="card bg-rose-50 border border-rose-100 p-3">
+              <div className="text-xs text-rose-700 font-medium">Alpa</div>
+              <div className="text-xl font-bold text-rose-800">{detail.attendance.alpa}</div>
+            </div>
+          </div>
+
+          <div className="card space-y-3">
+            <h3 className="font-semibold text-slate-900">Riwayat Presensi Pelajaran</h3>
+            <div className="divide-y divide-slate-100 text-sm">
+              {detail.attendance.logs.map((l, i) => (
+                <div key={i} className="py-2 flex items-center justify-between gap-2">
+                  <div>
+                    <span className="font-medium text-slate-800">
+                      {new Date(l.date).toLocaleDateString('id-ID', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'short',
+                      })}
+                    </span>
+                    {l.subject && (
+                      <span className="ml-2 rounded bg-[#162d6e]/10 px-2 py-0.5 text-xs font-bold text-[#162d6e]">
+                        {l.subject}
+                      </span>
+                    )}
+                    {l.note && <span className="ml-2 text-xs text-slate-500 italic">({l.note})</span>}
+                  </div>
+                  <span
+                    className={`rounded px-2 py-0.5 text-xs font-semibold uppercase ${ATT_BADGE[l.status]}`}
+                  >
+                    {l.status}
+                  </span>
+                </div>
+              ))}
+              {detail.attendance.logs.length === 0 && (
+                <p className="py-4 text-center text-xs text-slate-400">
+                  Belum ada catatan presensi semester ini.
+                </p>
+              )}
+            </div>
+          </div>
         </section>
       )}
 

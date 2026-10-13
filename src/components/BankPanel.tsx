@@ -5,6 +5,7 @@ import { api } from '@/lib/api-client';
 import { useLookups } from '@/lib/hooks';
 import { LETTERS, TYPE_LABEL, questionInput, type QType } from '@/lib/cbt/question-schema';
 import { exportRows, readSheet } from '@/lib/import/parse';
+import DriveUploadBox from './DriveUploadBox';
 
 export interface Bank { id: string; title: string; grade_level: number; subject_id: string; subject: string; question_count: number }
 export interface Q {
@@ -81,10 +82,13 @@ function QuestionModal({ bankId, initial, onClose }: { bankId: string; initial?:
           <label htmlFor="qb" className="label">Teks soal</label>
           <textarea id="qb" className="input min-h-24" value={body} onChange={(e) => setBody(e.target.value)} />
         </div>
-        <div>
-          <label htmlFor="qi" className="label">Gambar (opsional, tempel tautan, mis. Google Drive/Imgur)</label>
-          <input id="qi" className="input" placeholder="https://…" value={image} onChange={(e) => setImage(e.target.value)} />
-        </div>
+        <DriveUploadBox
+          label="Gambar Soal (Opsional)"
+          folderSubpath="Gambar Soal CBT"
+          value={image}
+          onChange={(url) => setImage(url)}
+          helperText="Upload gambar atau diagram langsung ke Google Drive Anda (otomatis diset publik agar dapat dilihat siswa saat ujian)."
+        />
 
         {choice && (
           <fieldset className="space-y-2">
@@ -157,9 +161,12 @@ export default function BankPanel() {
   const [bankId, setBankId] = useState('');
   const [editing, setEditing] = useState<Q | 'new' | null>(null);
   const [newBank, setNewBank] = useState({ assignmentId: '', title: '' });
+  const [renamingBank, setRenamingBank] = useState<{ id: string; title: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+
+  const currentBank = banks.find((b) => b.id === bankId);
 
   useEffect(() => { if (!bankId && banks[0]) setBankId(banks[0].id); }, [banks, bankId]);
   useEffect(() => { if (!newBank.assignmentId && lk?.assignments[0]) setNewBank((n) => ({ ...n, assignmentId: lk.assignments[0].id })); }, [lk, newBank.assignmentId]);
@@ -171,6 +178,28 @@ export default function BankPanel() {
     onSuccess: (r) => { setNewBank({ ...newBank, title: '' }); setErr(null); setBankId(r.id); qc.invalidateQueries({ queryKey: ['banks'] }); },
     onError: (e) => setErr((e as Error).message),
   });
+
+  const updateBank = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) =>
+      api('/api/banks', { method: 'PATCH', json: { id, title } }),
+    onSuccess: () => {
+      setErr(null);
+      setRenamingBank(null);
+      qc.invalidateQueries({ queryKey: ['banks'] });
+    },
+    onError: (e) => setErr((e as Error).message),
+  });
+
+  const deleteBank = useMutation({
+    mutationFn: (id: string) => api(`/api/banks?id=${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setErr(null);
+      setBankId('');
+      qc.invalidateQueries({ queryKey: ['banks'] });
+    },
+    onError: (e) => setErr((e as Error).message),
+  });
+
   const del = useMutation({
     mutationFn: (id: string) => api(`/api/questions/${id}`, { method: 'DELETE' }),
     onSuccess: () => { setErr(null); qc.invalidateQueries({ queryKey: ['questions', bankId] }); qc.invalidateQueries({ queryKey: ['banks'] }); },
@@ -315,6 +344,29 @@ export default function BankPanel() {
                 {banks.map((b) => <option key={b.id} value={b.id}>{b.subject} · {b.title} ({b.question_count} soal)</option>)}
               </select>
               <button className="btn btn-primary" onClick={() => setEditing('new')}>+ Tambah soal</button>
+              {currentBank && (
+                <>
+                  <button
+                    type="button"
+                    className="btn text-xs font-semibold text-[#162d6e]"
+                    onClick={() => setRenamingBank({ id: currentBank.id, title: currentBank.title })}
+                  >
+                    Ubah Nama
+                  </button>
+                  <button
+                    type="button"
+                    className="btn text-xs font-semibold text-rose-600 hover:bg-rose-50"
+                    disabled={deleteBank.isPending}
+                    onClick={() => {
+                      if (confirm(`Hapus bank soal "${currentBank.title}" beserta seluruh soal di dalamnya?`)) {
+                        deleteBank.mutate(currentBank.id);
+                      }
+                    }}
+                  >
+                    Hapus Bank
+                  </button>
+                </>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" className="btn text-xs" onClick={downloadQuestionTemplate}>
@@ -365,6 +417,32 @@ export default function BankPanel() {
       )}
 
       {editing && bankId && <QuestionModal key={editing === 'new' ? 'new' : editing.id} bankId={bankId} initial={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
+
+      {renamingBank && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl space-y-3">
+            <h2 className="text-base font-bold text-[#162d6e]">Ubah Nama Bank Soal</h2>
+            <div>
+              <label className="label">Nama / Judul Bank Soal</label>
+              <input
+                className="input"
+                value={renamingBank.title}
+                onChange={(e) => setRenamingBank({ ...renamingBank, title: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button className="btn" onClick={() => setRenamingBank(null)}>Batal</button>
+              <button
+                className="btn btn-primary"
+                disabled={!renamingBank.title.trim() || updateBank.isPending}
+                onClick={() => updateBank.mutate({ id: renamingBank.id, title: renamingBank.title })}
+              >
+                {updateBank.isPending ? 'Menyimpan…' : 'Simpan Nama'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

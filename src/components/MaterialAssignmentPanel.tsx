@@ -46,9 +46,54 @@ export default function MaterialAssignmentPanel() {
   const [tab, setTab] = useState<'materials' | 'assignments'>('materials');
   const [activeAssignment, setActiveAssignment] = useState<Assignment | null>(null);
 
-  // Modals
+  // Modals & Edit States
   const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
+
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+
+  function toLocalDatetimeInput(iso?: string | null) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function openCreateMaterial() {
+    setEditingMaterial(null);
+    setMatTitle('');
+    setMatUrl('');
+    setMatDesc('');
+    setShowMaterialModal(true);
+  }
+
+  function openEditMaterial(m: Material) {
+    setEditingMaterial(m);
+    setMatTitle(m.title);
+    setMatUrl(m.url);
+    setMatDesc(m.description || '');
+    setShowMaterialModal(true);
+  }
+
+  function openCreateAssignment() {
+    setEditingAssignment(null);
+    setAsgTitle('');
+    setAsgUrl('');
+    setAsgInstructions('');
+    setAsgDueAt('');
+    setShowAssignmentModal(true);
+  }
+
+  function openEditAssignment(a: Assignment) {
+    setEditingAssignment(a);
+    setAsgTitle(a.title);
+    setAsgUrl(a.url || '');
+    setAsgInstructions(a.instructions || '');
+    setAsgDueAt(toLocalDatetimeInput(a.due_at));
+    setShowAssignmentModal(true);
+  }
 
   // Forms
   const [matTitle, setMatTitle] = useState('');
@@ -117,6 +162,29 @@ export default function MaterialAssignmentPanel() {
     onError: (e) => setMsg({ ok: false, text: (e as Error).message }),
   });
 
+  const updateMaterial = useMutation({
+    mutationFn: () =>
+      api('/api/materials', {
+        method: 'PATCH',
+        json: {
+          id: editingMaterial!.id,
+          title: matTitle,
+          url: matUrl,
+          description: matDesc || undefined,
+        },
+      }),
+    onSuccess: () => {
+      setMsg({ ok: true, text: 'Materi berhasil diperbarui.' });
+      setShowMaterialModal(false);
+      setEditingMaterial(null);
+      setMatTitle('');
+      setMatUrl('');
+      setMatDesc('');
+      refetchMat();
+    },
+    onError: (e) => setMsg({ ok: false, text: (e as Error).message }),
+  });
+
   const deleteMaterial = useMutation({
     mutationFn: (id: string) => api(`/api/materials?id=${id}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -141,6 +209,31 @@ export default function MaterialAssignmentPanel() {
     onSuccess: () => {
       setMsg({ ok: true, text: 'Tugas berhasil dibuat.' });
       setShowAssignmentModal(false);
+      setAsgTitle('');
+      setAsgUrl('');
+      setAsgInstructions('');
+      setAsgDueAt('');
+      refetchAsg();
+    },
+    onError: (e) => setMsg({ ok: false, text: (e as Error).message }),
+  });
+
+  const updateAssignment = useMutation({
+    mutationFn: () =>
+      api('/api/assignments', {
+        method: 'PATCH',
+        json: {
+          id: editingAssignment!.id,
+          title: asgTitle,
+          instructions: asgInstructions || undefined,
+          url: asgUrl || undefined,
+          dueAt: asgDueAt ? new Date(asgDueAt).toISOString() : undefined,
+        },
+      }),
+    onSuccess: () => {
+      setMsg({ ok: true, text: 'Tugas berhasil diperbarui.' });
+      setShowAssignmentModal(false);
+      setEditingAssignment(null);
       setAsgTitle('');
       setAsgUrl('');
       setAsgInstructions('');
@@ -232,7 +325,7 @@ export default function MaterialAssignmentPanel() {
         <section className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="font-semibold text-slate-800">Daftar Materi</h2>
-            <button className="btn btn-primary" onClick={() => setShowMaterialModal(true)}>+ Bagikan Materi</button>
+            <button className="btn btn-primary" onClick={openCreateMaterial}>+ Bagikan Materi</button>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -240,12 +333,20 @@ export default function MaterialAssignmentPanel() {
               <div key={m.id} className="card space-y-2 relative">
                 <div className="flex justify-between items-start">
                   <div className="font-medium text-slate-900">{m.title}</div>
-                  <button
-                    onClick={() => confirm('Hapus materi ini?') && deleteMaterial.mutate(m.id)}
-                    className="text-xs text-rose-600 hover:underline"
-                  >
-                    Hapus
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openEditMaterial(m)}
+                      className="text-xs text-[#162d6e] hover:underline font-semibold"
+                    >
+                      Ubah
+                    </button>
+                    <button
+                      onClick={() => confirm('Hapus materi ini?') && deleteMaterial.mutate(m.id)}
+                      className="text-xs text-rose-600 hover:underline"
+                    >
+                      Hapus
+                    </button>
+                  </div>
                 </div>
                 {m.description && <p className="text-xs text-slate-600">{m.description}</p>}
                 <div className="pt-2 flex items-center justify-between text-xs text-slate-400">
@@ -268,7 +369,7 @@ export default function MaterialAssignmentPanel() {
         <section className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="font-semibold text-slate-800">Daftar Tugas</h2>
-            <button className="btn btn-primary" onClick={() => setShowAssignmentModal(true)}>+ Beri Tugas Baru</button>
+            <button className="btn btn-primary" onClick={openCreateAssignment}>+ Beri Tugas Baru</button>
           </div>
 
           <div className="space-y-3">
@@ -289,6 +390,12 @@ export default function MaterialAssignmentPanel() {
                 <div className="flex items-center gap-2">
                   <button className="btn btn-primary text-xs" onClick={() => setActiveAssignment(a)}>
                     Periksa & Nilai ({a.submissions_count})
+                  </button>
+                  <button
+                    onClick={() => openEditAssignment(a)}
+                    className="btn text-xs text-[#162d6e] hover:bg-slate-50 font-semibold"
+                  >
+                    Ubah
                   </button>
                   <button
                     onClick={() => confirm('Hapus tugas ini?') && deleteAssignment.mutate(a.id)}
@@ -417,11 +524,13 @@ export default function MaterialAssignmentPanel() {
         </section>
       )}
 
-      {/* Modal Tambah Materi */}
+      {/* Modal Tambah / Edit Materi */}
       {showMaterialModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl space-y-4 my-8">
-            <h2 className="text-lg font-bold text-[#162d6e]">Bagikan Materi Baru</h2>
+            <h2 className="text-lg font-bold text-[#162d6e]">
+              {editingMaterial ? 'Ubah Materi Pembelajaran' : 'Bagikan Materi Baru'}
+            </h2>
             <div>
               <label className="label">Judul Materi</label>
               <input className="input" placeholder="Bab 3: Hukum Newton" value={matTitle} onChange={(e) => setMatTitle(e.target.value)} />
@@ -443,30 +552,34 @@ export default function MaterialAssignmentPanel() {
               <textarea className="input min-h-20" placeholder="Pelajari slide halaman 1-15 sebelum pertemuan..." value={matDesc} onChange={(e) => setMatDesc(e.target.value)} />
             </div>
             <div className="flex justify-end gap-2">
-              <button className="btn" onClick={() => setShowMaterialModal(false)}>Batal</button>
+              <button className="btn" onClick={() => { setShowMaterialModal(false); setEditingMaterial(null); }}>Batal</button>
               <button
                 className="btn btn-primary"
-                disabled={!matTitle.trim() || !matUrl.trim() || createMaterial.isPending}
-                onClick={() => createMaterial.mutate()}
+                disabled={!matTitle.trim() || !matUrl.trim() || createMaterial.isPending || updateMaterial.isPending}
+                onClick={() => (editingMaterial ? updateMaterial.mutate() : createMaterial.mutate())}
               >
-                Bagikan Materi
+                {editingMaterial
+                  ? (updateMaterial.isPending ? 'Menyimpan…' : 'Simpan Perubahan')
+                  : (createMaterial.isPending ? 'Membagikan…' : 'Bagikan Materi')}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Tambah Tugas */}
+      {/* Modal Tambah / Edit Tugas */}
       {showAssignmentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl space-y-4 my-8">
-            <h2 className="text-lg font-bold text-[#162d6e]">Beri Tugas Baru</h2>
+            <h2 className="text-lg font-bold text-[#162d6e]">
+              {editingAssignment ? 'Ubah Tugas & Tenggat Waktu' : 'Beri Tugas Baru'}
+            </h2>
             <div>
               <label className="label">Judul Tugas</label>
               <input className="input" placeholder="Latihan Soal Gerak Lurus" value={asgTitle} onChange={(e) => setAsgTitle(e.target.value)} />
             </div>
             <div>
-              <label className="label">Tenggat Waktu (Opsional)</label>
+              <label className="label">Tenggat Waktu (Opsional / Perpanjang Deadline)</label>
               <input type="datetime-local" className="input" value={asgDueAt} onChange={(e) => setAsgDueAt(e.target.value)} />
             </div>
             <DriveUploadBox
@@ -486,13 +599,15 @@ export default function MaterialAssignmentPanel() {
               <textarea className="input min-h-20" placeholder="Kerjakan soal terlampir lalu upload langsung file/foto jawaban Anda melalui tombol Kumpulkan Tugas..." value={asgInstructions} onChange={(e) => setAsgInstructions(e.target.value)} />
             </div>
             <div className="flex justify-end gap-2">
-              <button className="btn" onClick={() => setShowAssignmentModal(false)}>Batal</button>
+              <button className="btn" onClick={() => { setShowAssignmentModal(false); setEditingAssignment(null); }}>Batal</button>
               <button
                 className="btn btn-primary"
-                disabled={!asgTitle.trim() || createAssignment.isPending}
-                onClick={() => createAssignment.mutate()}
+                disabled={!asgTitle.trim() || createAssignment.isPending || updateAssignment.isPending}
+                onClick={() => (editingAssignment ? updateAssignment.mutate() : createAssignment.mutate())}
               >
-                Simpan & Terbitkan
+                {editingAssignment
+                  ? (updateAssignment.isPending ? 'Menyimpan…' : 'Simpan Perubahan')
+                  : (createAssignment.isPending ? 'Menerbitkan…' : 'Simpan & Terbitkan')}
               </button>
             </div>
           </div>

@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import { today } from '@/lib/hooks';
 import ReportsList from '@/components/ReportsList';
-import AnnouncementBoard from '@/components/AnnouncementBoard';
 import DriveUploadBox from '@/components/DriveUploadBox';
 
 interface Child {
@@ -124,7 +123,7 @@ export default function ParentPortal() {
 
   const [picked, setPicked] = useState<string>('');
   const [tab, setTab] = useState<
-    'overview' | 'schedule' | 'grades' | 'assignments' | 'records' | 'reports' | 'announcements'
+    'overview' | 'schedule' | 'grades' | 'assignments' | 'records' | 'reports'
   >('overview');
 
   // Leave request form states
@@ -256,7 +255,6 @@ export default function ParentPortal() {
           { key: 'assignments', label: 'Tugas' },
           { key: 'records', label: 'Prestasi & BK' },
           { key: 'reports', label: 'e-Rapor & Catatan' },
-          { key: 'announcements', label: 'Pengumuman' },
         ].map((t) => (
           <button
             key={t.key}
@@ -749,13 +747,6 @@ export default function ParentPortal() {
             )}
           </section>
         </div>
-      )}
-
-      {/* Tab: Pengumuman */}
-      {tab === 'announcements' && (
-        <section>
-          <AnnouncementBoard />
-        </section>
       )}
     </div>
   );

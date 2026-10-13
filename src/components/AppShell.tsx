@@ -14,6 +14,7 @@ interface NavItem {
   href: string;
   label: string;
   wali?: boolean;
+  section?: string;
 }
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -26,20 +27,20 @@ const ROLE_LABELS: Record<Role, string> = {
 
 const NAV: Record<Role, NavItem[]> = {
   admin: [
-    { href: '/admin/data/students', label: 'Siswa' },
-    { href: '/admin/data/teachers', label: 'Guru' },
-    { href: '/admin/data/parents', label: 'Orang Tua' },
-    { href: '/admin/data/classes', label: 'Kelas' },
-    { href: '/admin/data/subjects', label: 'Mata Pelajaran' },
-    { href: '/admin/data/assignments', label: 'Penugasan Guru' },
-    { href: '/admin/jadwal', label: 'Jadwal Pelajaran' },
-    { href: '/admin/import', label: 'Impor Data' },
-    { href: '/admin/presensi', label: 'Presensi & Izin' },
-    { href: '/admin/kesiswaan', label: 'Kesiswaan & BK' },
-    { href: '/admin/laporan', label: 'Laporan & Cetak' },
-    { href: '/admin/semester', label: 'Semester & Rapor' },
-    { href: '/admin/sekolah', label: 'Profil Sekolah' },
-    { href: '/pengumuman', label: 'Pengumuman' },
+    { href: '/admin/data/students', label: 'Siswa', section: 'Data Master' },
+    { href: '/admin/data/teachers', label: 'Guru', section: 'Data Master' },
+    { href: '/admin/data/parents', label: 'Orang Tua', section: 'Data Master' },
+    { href: '/admin/data/classes', label: 'Kelas', section: 'Data Master' },
+    { href: '/admin/data/subjects', label: 'Mata Pelajaran', section: 'Data Master' },
+    { href: '/admin/data/assignments', label: 'Penugasan Guru', section: 'Data Master' },
+    { href: '/admin/jadwal', label: 'Jadwal Pelajaran', section: 'Akademik & KBM' },
+    { href: '/admin/presensi', label: 'Presensi & Izin', section: 'Akademik & KBM' },
+    { href: '/admin/kesiswaan', label: 'Kesiswaan & BK', section: 'Akademik & KBM' },
+    { href: '/pengumuman', label: 'Pengumuman', section: 'Akademik & KBM' },
+    { href: '/admin/laporan', label: 'Laporan & Cetak', section: 'Laporan & e-Rapor' },
+    { href: '/admin/semester', label: 'Semester & Rapor', section: 'Laporan & e-Rapor' },
+    { href: '/admin/sekolah', label: 'Profil Sekolah', section: 'Pengaturan' },
+    { href: '/admin/import', label: 'Impor Data Massal', section: 'Pengaturan' },
   ],
   guru: [
     { href: '/guru/presensi', label: 'Presensi & Jurnal' },
@@ -202,23 +203,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
               <div className="space-y-1">
-                {items.map((i) => {
-                  const active = pathname === i.href || pathname.startsWith(i.href + '/');
-                  return (
-                    <Link
-                      key={i.href}
-                      href={i.href}
-                      className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${
-                        active
-                          ? 'bg-[#162d6e] text-white border-l-4 border-[#f5b800]'
-                          : 'text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>{i.label}</span>
-                      {active && <span className="h-2 w-2 rounded-full bg-[#f5b800]" />}
-                    </Link>
-                  );
-                })}
+                {(() => {
+                  let lastSection = '';
+                  return items.map((i) => {
+                    const active = pathname === i.href || pathname.startsWith(i.href + '/');
+                    const showHeader = i.section && i.section !== lastSection;
+                    if (i.section) lastSection = i.section;
+                    return (
+                      <div key={i.href}>
+                        {showHeader && (
+                          <div className="pt-2 pb-1 px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                            {i.section}
+                          </div>
+                        )}
+                        <Link
+                          href={i.href}
+                          className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-semibold transition ${
+                            active
+                              ? 'bg-[#162d6e] text-white border-l-4 border-[#f5b800]'
+                              : 'text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span>{i.label}</span>
+                          {active && <span className="h-2 w-2 rounded-full bg-[#f5b800]" />}
+                        </Link>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
             <div className="border-t border-slate-100 pt-3 space-y-1">
@@ -237,29 +249,38 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main Body Layout — Full Fluid Width across all monitor sizes */}
       <div className="flex w-full flex-1">
         {/* Desktop & Small/Large Monitor Sidebar */}
-        <aside className="hidden md:flex md:w-52 lg:w-60 xl:w-64 md:shrink-0 md:flex-col md:justify-between border-r border-slate-200/80 bg-white p-3">
+        <aside className="hidden md:flex md:w-56 lg:w-60 xl:w-64 md:shrink-0 md:flex-col md:justify-between border-r border-slate-200/80 bg-white p-3 overflow-y-auto max-h-[calc(100vh-60px)] sticky top-[60px]">
           <div className="space-y-1">
-            <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Menu Utama
-            </div>
-            <nav className="flex flex-col gap-1">
-              {items.map((i) => {
-                const active = pathname === i.href || pathname.startsWith(i.href + '/');
-                return (
-                  <Link
-                    key={i.href}
-                    href={i.href}
-                    className={`flex items-center justify-between whitespace-nowrap rounded-xl px-3.5 py-2.5 text-sm transition ${
-                      active
-                        ? 'bg-[#162d6e] font-semibold text-white shadow-xs border-l-4 border-[#f5b800]'
-                        : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-[#162d6e]'
-                    }`}
-                  >
-                    <span>{i.label}</span>
-                    {active && <span className="h-1.5 w-1.5 rounded-full bg-[#f5b800]" />}
-                  </Link>
-                );
-              })}
+            <nav className="flex flex-col gap-0.5">
+              {(() => {
+                let lastSection = '';
+                return items.map((i) => {
+                  const active = pathname === i.href || pathname.startsWith(i.href + '/');
+                  const showHeader = i.section && i.section !== lastSection;
+                  if (i.section) lastSection = i.section;
+                  return (
+                    <div key={i.href}>
+                      {showHeader && (
+                        <div className="pt-2.5 pb-1 px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                          {i.section}
+                        </div>
+                      )}
+                      <Link
+                        key={i.href}
+                        href={i.href}
+                        className={`flex items-center justify-between whitespace-nowrap rounded-xl px-3.5 py-2 text-sm transition ${
+                          active
+                            ? 'bg-[#162d6e] font-semibold text-white shadow-xs border-l-4 border-[#f5b800]'
+                            : 'font-medium text-slate-600 hover:bg-slate-100 hover:text-[#162d6e]'
+                        }`}
+                      >
+                        <span>{i.label}</span>
+                        {active && <span className="h-1.5 w-1.5 rounded-full bg-[#f5b800]" />}
+                      </Link>
+                    </div>
+                  );
+                });
+              })()}
             </nav>
           </div>
 

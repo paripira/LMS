@@ -81,7 +81,7 @@ CREATE TABLE teachers (
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), deleted_at timestamptz
 );
 CREATE UNIQUE INDEX teachers_user_uq ON teachers (user_id) WHERE deleted_at IS NULL;
-CREATE UNIQUE INDEX teachers_nip_uq  ON teachers (nip) WHERE nip IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX teachers_nip_idx        ON teachers (nip) WHERE nip IS NOT NULL AND deleted_at IS NULL;
 
 CREATE TABLE students (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

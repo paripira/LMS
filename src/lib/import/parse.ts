@@ -23,6 +23,14 @@ export async function readSheet(file: File): Promise<Record<string, unknown>[]> 
           o[key] = d ? `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}` : '';
         } else o[key] = v;
       }
+      if (o.kelas && !o.nama_kelas) o.nama_kelas = o.kelas;
+      if (o.nama_kelas && !o.kelas) o.kelas = o.nama_kelas;
+      if (o.nip && !o.guru) o.guru = o.nip;
+      if (o.username && !o.guru) o.guru = o.username;
+      if (o.nip_guru) {
+        if (!o.nip) o.nip = o.nip_guru;
+        if (!o.guru) o.guru = o.nip_guru;
+      }
       return o;
     })
     .filter((o) => Object.values(o).some((v) => String(v).trim() !== '')); // drop blank rows

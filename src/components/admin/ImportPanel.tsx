@@ -90,10 +90,23 @@ export default function ImportPanel() {
         <p className="text-xs text-slate-500">Kolom: {TEMPLATES[entity].headers.join(', ')}. Baris yang sudah ada diperbarui (NIS / nama pengguna / nama kelas sebagai kunci).</p>
 
         {entity === 'students' && (
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={createAccounts} onChange={(e) => setCreateAccounts(e.target.checked)} />
-            Buat akun login siswa otomatis (nama pengguna = NIS, kata sandi awal = NIS)
-          </label>
+          <div className="space-y-1 rounded-xl bg-blue-50/60 p-3 border border-blue-100">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <input type="checkbox" checked={createAccounts} onChange={(e) => setCreateAccounts(e.target.checked)} />
+              Buat akun login siswa otomatis (nama pengguna = NIS, kata sandi awal = NIS)
+            </label>
+            <p className="text-xs text-slate-600 pl-6">
+              💡 <b>Catatan Fleksibel:</b> Hanya kolom <b>nama</b> dan <b>kelas</b> yang wajib diisi. Kolom NIS, NISN, Jenis Kelamin, dll bersifat opsional. Jika NIS kosong di Excel, sistem otomatis membuatkan NIS berurutan berdasarkan nama kelas (contoh: 7A01, 7A02, ...).
+            </p>
+          </div>
+        )}
+
+        {entity === 'teachers' && (
+          <div className="space-y-1 rounded-xl bg-blue-50/60 p-3 border border-blue-100">
+            <p className="text-xs text-slate-700 font-medium">
+              💡 <b>Catatan Fleksibel:</b> Hanya kolom <b>nama</b> yang wajib diisi. Kolom username, NIP, dan no telepon bersifat opsional. Jika username kosong di Excel, sistem otomatis membuatkan username rapi berdasarkan nama guru (contoh: <code>sari.wulandari</code>) serta kata sandi awal = username.
+            </p>
+          </div>
         )}
 
         <input data-testid="import-file" type="file" accept=".xlsx,.xls,.csv" className="input" onChange={(e) => onFile(e.target.files?.[0])} />

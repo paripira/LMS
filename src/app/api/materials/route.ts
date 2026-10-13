@@ -63,6 +63,39 @@ export const POST = handle(async (req) => {
   return Response.json({ ok: true, id: m.id });
 });
 
+const PatchMaterial = z.object({
+  id: z.string().uuid(),
+  title: z.string().trim().min(1, 'Judul materi wajib diisi').max(200),
+  description: z.string().trim().max(2000).nullish().transform((v) => v || null),
+  url: z.string().trim().regex(/^https?:\/\//i, 'Tautan materi harus diawali http:// atau https://'),
+});
+
+export const PATCH = handle(async (req) => {
+  const me = await requireRole('guru', 'admin');
+  const b = PatchMaterial.parse(await req.json());
+
+  const [m] = await sql`
+    SELECT m.id, m.teaching_assignment_id, ta.teacher_id
+    FROM materials m
+    JOIN teaching_assignments ta ON ta.id = m.teaching_assignment_id
+    WHERE m.id = ${b.id} AND m.deleted_at IS NULL`;
+
+  if (!m) throw new ApiError(404, 'Materi tidak ditemukan.');
+  if (me.role === 'guru' && m.teacher_id !== me.teacherId) {
+    throw new ApiError(403, 'Anda bukan pemilik materi ini.');
+  }
+
+  await sql`
+    UPDATE materials
+    SET title = ${b.title},
+        description = ${b.description},
+        url = ${b.url},
+        updated_at = now()
+    WHERE id = ${b.id}`;
+
+  return Response.json({ ok: true, id: b.id });
+});
+
 export const DELETE = handle(async (req) => {
   const me = await requireRole('guru', 'admin');
   const id = z.string().uuid().parse(new URL(req.url).searchParams.get('id'));

@@ -2,7 +2,7 @@ import postgres from 'postgres';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const FILES = ['schema.sql', '002_extras.sql', '003_features.sql', '004_features_phase2.sql', '005_multi_jenjang.sql', '006_targeted_announcements.sql']; // append new migration files here, in order
+const FILES = ['schema.sql', '002_extras.sql', '003_features.sql', '004_features_phase2.sql', '005_multi_jenjang.sql', '006_targeted_announcements.sql', '007_flexible_teacher_nip.sql']; // append new migration files here, in order
 
 export async function migrate() {
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });

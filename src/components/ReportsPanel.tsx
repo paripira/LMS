@@ -49,7 +49,7 @@ export default function ReportsPanel() {
   const { data: lk } = useLookups();
   const { data: school } = useSchool();
   const [tab, setTab] = useState<'legger' | 'attendance' | 'blank_sheet' | 'cards'>('legger');
-  const [jenjangFilter, setJenjangFilter] = useState<'' | 'SD' | 'SMP'>('');
+  const [jenjangFilter, setJenjangFilter] = useState<'' | 'TK' | 'SD' | 'SMP'>('');
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [blankMonth, setBlankMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
@@ -154,7 +154,7 @@ export default function ReportsPanel() {
     <div className="w-full space-y-5">
       <div className="teramia-banner p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div>
-          <h1 className="text-lg sm:text-xl font-extrabold text-white">Laporan &amp; Cetak Dokumen (SD &amp; SMP)</h1>
+          <h1 className="text-lg sm:text-xl font-extrabold text-white">Laporan &amp; Cetak Dokumen (TK, SD &amp; SMP)</h1>
           <p className="text-xs text-slate-200 mt-0.5">Rekap legger nilai, rekapitulasi presensi semester, format absensi cetak, dan kartu peserta ujian per unit jenjang.</p>
         </div>
         <div className="flex flex-wrap items-end gap-2.5">
@@ -163,6 +163,7 @@ export default function ReportsPanel() {
             <div className="flex rounded-xl bg-white/10 p-1">
               {[
                 { k: '', label: 'Semua' },
+                { k: 'TK', label: 'Unit TK' },
                 { k: 'SD', label: 'Unit SD' },
                 { k: 'SMP', label: 'Unit SMP' },
               ].map((j) => (

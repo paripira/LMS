@@ -86,6 +86,41 @@ export const POST = handle(async (req) => {
   return Response.json({ ok: true, id: a.id });
 });
 
+const PatchAssignment = z.object({
+  id: z.string().uuid(),
+  title: z.string().trim().min(1, 'Judul tugas wajib diisi').max(200),
+  instructions: z.string().trim().max(4000).nullish().transform((v) => v || null),
+  url: z.string().trim().regex(/^https?:\/\//i, 'Tautan referensi harus diawali http:// atau https://').nullish().transform((v) => v || null),
+  dueAt: z.string().datetime().nullish().transform((v) => v || null),
+});
+
+export const PATCH = handle(async (req) => {
+  const me = await requireRole('guru', 'admin');
+  const b = PatchAssignment.parse(await req.json());
+
+  const [a] = await sql`
+    SELECT a.id, a.teaching_assignment_id, ta.teacher_id
+    FROM assignments a
+    JOIN teaching_assignments ta ON ta.id = a.teaching_assignment_id
+    WHERE a.id = ${b.id} AND a.deleted_at IS NULL`;
+
+  if (!a) throw new ApiError(404, 'Tugas tidak ditemukan.');
+  if (me.role === 'guru' && a.teacher_id !== me.teacherId) {
+    throw new ApiError(403, 'Anda bukan pemilik tugas ini.');
+  }
+
+  await sql`
+    UPDATE assignments
+    SET title = ${b.title},
+        instructions = ${b.instructions},
+        url = ${b.url},
+        due_at = ${b.dueAt ? new Date(b.dueAt) : null},
+        updated_at = now()
+    WHERE id = ${b.id}`;
+
+  return Response.json({ ok: true, id: b.id });
+});
+
 export const DELETE = handle(async (req) => {
   const me = await requireRole('guru', 'admin');
   const id = z.string().uuid().parse(new URL(req.url).searchParams.get('id'));

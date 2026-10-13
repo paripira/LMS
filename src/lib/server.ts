@@ -8,6 +8,15 @@ import { ZodError } from 'zod';
 // ---------- DB ----------
 // prepare:false is required for PgBouncer transaction pooling (managed Postgres default).
 const g = globalThis as unknown as { __sql?: ReturnType<typeof postgres> };
+const isLocalDb = /localhost|127\.0\.0\.1/i.test(process.env.DATABASE_URL || '');
+const dbSsl = process.env.DATABASE_SSL === 'true'
+  ? 'require'
+  : process.env.DATABASE_SSL === 'false' || isLocalDb
+  ? false
+  : process.env.NODE_ENV === 'production'
+  ? 'require'
+  : false;
+
 export const sql =
   g.__sql ??
   (g.__sql = postgres(process.env.DATABASE_URL!, {
@@ -15,7 +24,7 @@ export const sql =
     idle_timeout: 20,
     connect_timeout: 10,
     prepare: false,
-    ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
+    ssl: dbSsl,
   }));
 
 // ---------- Errors ----------

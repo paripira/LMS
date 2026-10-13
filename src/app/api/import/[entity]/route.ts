@@ -3,6 +3,8 @@ import { sql, handle, requireRole, ApiError } from '@/lib/server';
 import { hashPassword, randomPassword } from '@/lib/password';
 import {
   ROW_SCHEMAS,
+  normHeader,
+  cleanTeacherUsername,
   type ClassRow,
   type ImportEntity,
   type StudentRow,
@@ -19,28 +21,63 @@ const Body = z.object({ rows: z.array(z.unknown()).min(1).max(100), createAccoun
 
 // ---------- students ----------
 async function importStudents(rows: StudentRow[], createAccounts: boolean, creds: Cred[]): Promise<Counts> {
+  const [ay] = await sql`SELECT id FROM academic_years WHERE is_active AND deleted_at IS NULL`;
+  const classes = ay ? await sql`SELECT id, name, jenjang FROM classes WHERE academic_year_id = ${ay.id} AND deleted_at IS NULL` : [];
+  const cmap = new Map(classes.map((c) => [String(c.name).toLowerCase(), { id: c.id as string, jenjang: c.jenjang as 'TK' | 'SD' | 'SMP' }]));
+
+  const existingNisRows = await sql`SELECT nis FROM students WHERE deleted_at IS NULL`;
+  const usedNis = new Set<string>(existingNisRows.map((s) => String(s.nis).toUpperCase()));
+  const classCounters = new Map<string, number>();
+
+  const resolvedRows = rows.map((r) => {
+    let classInfo: { id: string; jenjang: 'TK' | 'SD' | 'SMP' } | undefined;
+    if (r.kelas) {
+      classInfo = cmap.get(r.kelas.toLowerCase());
+      if (!classInfo) throw new ApiError(422, `Kelas "${r.kelas}" (siswa ${r.nama}) belum ada di tahun ajaran aktif. Impor/buat data kelas terlebih dahulu.`);
+    }
+
+    const jenjang: 'TK' | 'SD' | 'SMP' = r.jenjang ?? classInfo?.jenjang ?? 'SMP';
+    const jk: 'L' | 'P' = r.jk || 'L';
+
+    let nis = r.nis ? String(r.nis).trim() : '';
+    if (!nis) {
+      const prefix = (r.kelas ? r.kelas.replace(/[^A-Za-z0-9]/g, '').toUpperCase() : '') || 'SIS';
+      let seq = classCounters.get(prefix) ?? 1;
+      let candidate = `${prefix}${String(seq).padStart(2, '0')}`;
+      while (usedNis.has(candidate.toUpperCase())) {
+        seq++;
+        candidate = `${prefix}${String(seq).padStart(2, '0')}`;
+      }
+      usedNis.add(candidate.toUpperCase());
+      classCounters.set(prefix, seq + 1);
+      nis = candidate;
+    } else {
+      usedNis.add(nis.toUpperCase());
+    }
+
+    return {
+      ...r,
+      nis,
+      jenjang,
+      jk,
+      classId: classInfo?.id,
+    };
+  });
+
   const prep = await Promise.all(
-    rows.map(async (r) => {
-      const sp = createAccounts ? String(r.nis) : null;
-      const pp = r.ortu_username ? String(r.nis) : null;
+    resolvedRows.map(async (r) => {
+      const sp = createAccounts ? r.nis : null;
+      const pp = r.ortu_username ? r.nis : null;
       return { sp, sh: sp ? await hashPassword(sp) : null, pp, ph: pp ? await hashPassword(pp) : null };
     }),
   );
 
   return sql.begin(async (tx) => {
-    const [ay] = await tx`SELECT id FROM academic_years WHERE is_active AND deleted_at IS NULL`;
-    const classes = ay ? await tx`SELECT id, name FROM classes WHERE academic_year_id = ${ay.id} AND deleted_at IS NULL` : [];
-    const cmap = new Map(classes.map((c) => [String(c.name).toLowerCase(), c.id as string]));
     const c: Counts = { inserted: 0, updated: 0 };
 
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
+    for (let i = 0; i < resolvedRows.length; i++) {
+      const r = resolvedRows[i];
       const p = prep[i];
-      let classId: string | undefined;
-      if (r.kelas) {
-        classId = cmap.get(r.kelas.toLowerCase());
-        if (!classId) throw new ApiError(422, `Kelas "${r.kelas}" (siswa ${r.nama}) belum ada di tahun ajaran aktif. Impor/buat data kelas terlebih dahulu.`);
-      }
 
       const [st] = await tx`
         INSERT INTO students (nis, nisn, full_name, gender, birth_date, jenjang)
@@ -51,8 +88,8 @@ async function importStudents(rows: StudentRow[], createAccounts: boolean, creds
         RETURNING id, user_id, (xmax = 0) AS inserted`;
       st.inserted ? c.inserted++ : c.updated++;
 
-      if (classId && ay) {
-        await tx`INSERT INTO enrollments (student_id, class_id, academic_year_id) VALUES (${st.id}, ${classId}, ${ay.id})
+      if (r.classId && ay) {
+        await tx`INSERT INTO enrollments (student_id, class_id, academic_year_id) VALUES (${st.id}, ${r.classId}, ${ay.id})
                  ON CONFLICT (student_id, academic_year_id) WHERE deleted_at IS NULL DO UPDATE SET class_id = EXCLUDED.class_id`;
       }
 
@@ -84,26 +121,77 @@ async function importStudents(rows: StudentRow[], createAccounts: boolean, creds
   });
 }
 
+
 // ---------- teachers ----------
 async function importTeachers(rows: TeacherRow[], creds: Cred[]): Promise<Counts> {
-  const prep = await Promise.all(rows.map(async () => { const pw = randomPassword(); return { pw, hash: await hashPassword(pw) }; }));
+  const existingUsers = await sql`SELECT u.username, t.full_name FROM users u LEFT JOIN teachers t ON t.user_id = u.id WHERE u.deleted_at IS NULL`;
+  const usedUsernames = new Set<string>(existingUsers.map((u) => String(u.username).toLowerCase()));
+  const teacherByName = new Map<string, string>();
+  for (const u of existingUsers) {
+    if (u.full_name) {
+      teacherByName.set(String(u.full_name).trim().toLowerCase(), String(u.username).toLowerCase());
+    }
+  }
+
+  const resolved = rows.map((r) => {
+    let username = r.username ? String(r.username).trim().toLowerCase() : '';
+    const normName = String(r.nama).trim().toLowerCase();
+    if (!username) {
+      if (teacherByName.has(normName)) {
+        username = teacherByName.get(normName)!;
+      } else {
+        username = cleanTeacherUsername(r.nama, usedUsernames);
+        teacherByName.set(normName, username);
+      }
+    } else {
+      usedUsernames.add(username.toLowerCase());
+    }
+    const initialPassword = username;
+    const rawNip = r.nip != null ? String(r.nip).replace(/^'/, '').trim() : '';
+    const nip = rawNip || null;
+    const phone = r.telepon != null && String(r.telepon).trim() ? String(r.telepon).trim() : null;
+
+    return {
+      nama: r.nama,
+      nip,
+      phone,
+      username,
+      initialPassword,
+    };
+  });
+
+  const prep = await Promise.all(
+    resolved.map(async (r) => ({
+      hash: await hashPassword(r.initialPassword),
+    })),
+  );
+
   return sql.begin(async (tx) => {
     const c: Counts = { inserted: 0, updated: 0 };
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      const [ex] = await tx`SELECT t.id FROM teachers t JOIN users u ON u.id = t.user_id
-                            WHERE u.username = ${r.username} AND t.deleted_at IS NULL`;
+    for (let i = 0; i < resolved.length; i++) {
+      const r = resolved[i];
+      const p = prep[i];
+
+      const [ex] = await tx`
+        SELECT t.id, t.user_id FROM teachers t
+        JOIN users u ON u.id = t.user_id
+        WHERE u.username = ${r.username}
+          AND t.deleted_at IS NULL`;
+
       if (ex) {
-        await tx`UPDATE teachers SET nip = ${r.nip ?? null}, full_name = ${r.nama}, phone = ${r.telepon ?? null} WHERE id = ${ex.id}`;
+        await tx`UPDATE teachers SET nip = ${r.nip}, full_name = ${r.nama}, phone = ${r.phone} WHERE id = ${ex.id}`;
+        await tx`UPDATE users SET full_name = ${r.nama} WHERE id = ${ex.user_id}`;
         c.updated++;
         continue;
       }
+
       const [u] = await tx`INSERT INTO users (username, password_hash, role, full_name, must_change_password)
-        VALUES (${r.username}, ${prep[i].hash}, 'guru', ${r.nama}, true)
+        VALUES (${r.username}, ${p.hash}, 'guru', ${r.nama}, true)
         ON CONFLICT (username) WHERE deleted_at IS NULL DO NOTHING RETURNING id`;
       if (!u) throw new ApiError(422, `Nama pengguna "${r.username}" sudah dipakai oleh akun lain.`);
-      await tx`INSERT INTO teachers (user_id, nip, full_name, phone) VALUES (${u.id}, ${r.nip ?? null}, ${r.nama}, ${r.telepon ?? null})`;
-      creds.push({ username: r.username, password: prep[i].pw, name: r.nama, role: 'guru' });
+
+      await tx`INSERT INTO teachers (user_id, nip, full_name, phone) VALUES (${u.id}, ${r.nip}, ${r.nama}, ${r.phone})`;
+      creds.push({ username: r.username, password: r.initialPassword, name: r.nama, role: 'guru' });
       c.inserted++;
     }
     return c;
@@ -119,8 +207,11 @@ async function importClasses(rows: ClassRow[]): Promise<Counts> {
     for (const r of rows) {
       let teacherId: string | null = null;
       if (r.wali_nip) {
-        const [t] = await tx`SELECT id FROM teachers WHERE nip = ${r.wali_nip} AND deleted_at IS NULL`;
-        if (!t) throw new ApiError(422, `Wali kelas dengan NIP ${r.wali_nip} (kelas ${r.nama}) tidak ditemukan. Impor data guru terlebih dahulu.`);
+        const [t] = await tx`
+          SELECT t.id FROM teachers t
+          JOIN users u ON u.id = t.user_id
+          WHERE (t.nip = ${r.wali_nip} OR u.username = ${r.wali_nip.toLowerCase()}) AND t.deleted_at IS NULL`;
+        if (!t) throw new ApiError(422, `Wali kelas "${r.wali_nip}" (kelas ${r.nama}) tidak ditemukan. Masukkan NIP atau username guru yang valid.`);
         teacherId = t.id;
       }
       const [k] = await tx`
@@ -226,7 +317,21 @@ export const POST = handle(async (req, { params }) => {
 
   const { rows: raw, createAccounts } = Body.parse(await req.json());
   const rows = raw.map((r, i) => {
-    const p = schema.safeParse(r);
+    const row: Record<string, unknown> = {};
+    if (typeof r === 'object' && r !== null) {
+      for (const [k, v] of Object.entries(r as Record<string, unknown>)) {
+        row[normHeader(k)] = v;
+      }
+    }
+    if (row.nama_kelas && !row.kelas) row.kelas = row.nama_kelas;
+    if (row.kelas && !row.nama_kelas) row.nama_kelas = row.kelas;
+    if (row.nip && !row.guru) row.guru = row.nip;
+    if (row.username && !row.guru) row.guru = row.username;
+    if (row.nip_guru) {
+      if (!row.nip) row.nip = row.nip_guru;
+      if (!row.guru) row.guru = row.nip_guru;
+    }
+    const p = schema.safeParse(row);
     if (!p.success) throw new ApiError(422, `Baris ke-${i + 1} pada kelompok ini tidak valid: ${p.error.issues[0]?.message}`);
     return p.data;
   });
